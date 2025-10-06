@@ -10,6 +10,7 @@ from agents.quant_analyst import create_quantitative_analyst_agent
 from agents.qual_analyst import create_qualitative_analyst_agent
 from agents.report_writer import create_report_writer_agent
 from tools.financial_tools import get_stock_price, get_recent_news
+from models import QuantitativeAnalysis, QualitativeAnalysis, InvestmentReport
 
 class AgentState(TypedDict):
     """
@@ -20,9 +21,9 @@ class AgentState(TypedDict):
     symbol: str
     stock_data: str
     news_data: str
-    quant_analysis: str
-    qual_analysis: str
-    final_report: str
+    quant_analysis: QuantitativeAnalysis
+    qual_analysis: QualitativeAnalysis
+    final_report: InvestmentReport
     # 'messages' is not used in this linear graph but is good practice for more complex agents
     messages: Annotated[List[BaseMessage], operator.add]
 
@@ -47,24 +48,46 @@ def quantitative_analyst_node(state: AgentState):
     print("--- 2. Analyzing Quantitative Data ---")
     quant_analyst_chain = create_quantitative_analyst_agent()
     result = quant_analyst_chain.invoke({"stock_data": state["stock_data"]})
-    return {"quant_analysis": result.content}
+    return {"quant_analysis": result}
 
 def qualitative_analyst_node(state: AgentState):
     """Node for the qualitative analyst agent."""
     print("--- 3. Analyzing Qualitative Data ---")
     qual_analyst_chain = create_qualitative_analyst_agent()
     result = qual_analyst_chain.invoke({"news_data": state["news_data"]})
-    return {"qual_analysis": result.content}
+    return {"qual_analysis": result}
 
 def report_writer_node(state: AgentState):
     """Node for the report writer agent."""
     print("--- 4. Compiling Final Report ---")
     report_writer_chain = create_report_writer_agent()
+
+    # Flatten the Pydantic objects for template access
+    quant_analysis = state["quant_analysis"]
+    qual_analysis = state["qual_analysis"]
+
     result = report_writer_chain.invoke({
-        "quant_analysis": state["quant_analysis"],
-        "qual_analysis": state["qual_analysis"]
+        "quant_analysis": quant_analysis,
+        "qual_analysis": qual_analysis,
+        "company_name": state["company_name"],
+        "symbol": state["symbol"],
+        # Flatten quantitative analysis attributes
+        "quant_analysis.current_price": quant_analysis.current_price,
+        "quant_analysis.trend_analysis": quant_analysis.trend_analysis,
+        "quant_analysis.key_metrics_summary": quant_analysis.key_metrics_summary,
+        "quant_analysis.week_high_52": quant_analysis.week_high_52,
+        "quant_analysis.week_low_52": quant_analysis.week_low_52,
+        "quant_analysis.market_cap": quant_analysis.market_cap,
+        "quant_analysis.pe_ratio": quant_analysis.pe_ratio,
+        # Flatten qualitative analysis attributes
+        "qual_analysis.overall_sentiment": qual_analysis.overall_sentiment,
+        "qual_analysis.sentiment_score": qual_analysis.sentiment_score,
+        "qual_analysis.key_risks": qual_analysis.key_risks,
+        "qual_analysis.key_opportunities": qual_analysis.key_opportunities,
+        "qual_analysis.news_summary": qual_analysis.news_summary,
+        "qual_analysis.market_perception": qual_analysis.market_perception,
     })
-    return {"final_report": result.content}
+    return {"final_report": result}
 
 
 # --- Graph Definition and Compilation ---
